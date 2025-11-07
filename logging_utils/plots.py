@@ -3,8 +3,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve, calibration_curve
-
+from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve
+from sklearn.calibration import calibration_curve
 
 # ============================
 # Learning curves
@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_c
 def plot_training_curves(history, model_name, out_dir="plots"):
     """
     Plots loss and accuracy by epoch.
-history: dict with keys "train_loss", "val_loss", "train_acc", "val_acc"
+    history: dict with keys "train_loss", "val_loss", "train_acc", "val_acc"
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-def save_misclassified_images(images, targets, preds, classes, model_name, split, out_dir):
+def save_misclassified_images(images, targets, preds, classes, model_name, split, out_dir, dls):
     """
     Saves examples of incorrect classifications in separate folders.
 
@@ -43,7 +43,8 @@ def save_misclassified_images(images, targets, preds, classes, model_name, split
         pair_dir = out_dir / f"{true_label}_as_{pred_label}"
         pair_dir.mkdir(parents=True, exist_ok=True)
 
-        img = images[idx].permute(1, 2, 0).cpu().numpy()
+        img_path, _ = images[idx]
+        img = plt.imread(img_path)
         img = (img - img.min()) / (img.max() - img.min())
 
         plt.imsave(pair_dir / f"sample_{idx}.png", img)

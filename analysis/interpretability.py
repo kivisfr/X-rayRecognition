@@ -1,4 +1,5 @@
 # analysis/interpretability.py
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -66,21 +67,6 @@ class GradCAM:
         return cam
 
 
-def show_gradcam_on_image(img_tensor, cam, title="Grad-CAM"):
-    """
-    img_tensor: [C,H,W], torch.Tensor
-    cam: numpy heatmap [H,W]
-    """
-    img = img_tensor.permute(1, 2, 0).cpu().numpy()
-    img = (img - img.min()) / (img.max() - img.min())
-
-    plt.imshow(img)
-    plt.imshow(cam, cmap="jet", alpha=0.5)
-    plt.title(title)
-    plt.axis("off")
-    plt.show()
-
-
 # ============================
 # Saliency Maps
 # ============================
@@ -110,16 +96,71 @@ def compute_saliency(model, input_tensor, target_class=None):
     return saliency
 
 
-def show_saliency_on_image(img_tensor, saliency_map, title="Saliency Map"):
+def save_saliency_on_image(img_tensor, saliency, out_path, title=None):
     """
-    img_tensor: [C,H,W], torch.Tensor
-    saliency_map: numpy heatmap [H,W]
+    Сохраняет saliency map поверх изображения в файл.
+
+    Parameters
+    ----------
+    img_tensor : torch.Tensor
+        Изображение в формате (C, H, W).
+    saliency : np.ndarray
+        Карта чувствительности (H, W).
+    out_path : str or Path
+        Путь для сохранения итогового изображения.
+    title : str, optional
+        Заголовок для картинки (будет добавлен сверху).
     """
-    img = img_tensor.permute(1, 2, 0).cpu().numpy()
+    out_path = Path(out_path)
+
+    # преобразуем тензор в numpy
+    img = img_tensor.permute(1, 2, 0).detach().cpu().numpy()
     img = (img - img.min()) / (img.max() - img.min())
 
+    plt.figure(figsize=(6, 6))
     plt.imshow(img)
-    plt.imshow(saliency_map, cmap="hot", alpha=0.5)
-    plt.title(title)
+    plt.imshow(saliency, cmap="jet", alpha=0.5)
+    if title:
+        plt.title(title)
     plt.axis("off")
-    plt.show()
+
+    plt.savefig(out_path, bbox_inches="tight", pad_inches=0)
+    plt.close()
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+from pathlib import Path
+
+
+def save_gradcam_on_image(img_tensor, cam, out_path, title=None):
+    """
+    Сохраняет Grad-CAM карту поверх изображения в файл без отображения.
+
+    Parameters
+    ----------
+    img_tensor : torch.Tensor
+        Изображение в формате (C, H, W).
+    cam : np.ndarray
+        Grad-CAM карта (H, W).
+    out_path : str or Path
+        Путь для сохранения итогового изображения.
+    title : str, optional
+        Заголовок для картинки.
+    """
+    out_path = Path(out_path)
+
+    # преобразуем тензор в numpy
+    img = img_tensor.permute(1, 2, 0).detach().cpu().numpy()
+    img = (img - img.min()) / (img.max() - img.min())  # нормализация
+
+    plt.figure(figsize=(6, 6))
+    plt.imshow(img)
+    plt.imshow(cam, cmap="jet", alpha=0.5)  # накладываем Grad-CAM
+    if title:
+        plt.title(title)
+    plt.axis("off")
+
+    # сохраняем в файл
+    plt.savefig(out_path, bbox_inches="tight", pad_inches=0)
+    plt.close()  # закрываем figure, чтобы не было отображения

@@ -33,7 +33,7 @@ def save_checkpoint(model, optimizer, epoch, history, out_path):
     torch.save(checkpoint, out_path)
 
 
-def load_checkpoint(model, optimizer, in_path, device="cuda"):
+def load_checkpoint(model, optimizer, in_path, device):
     """
    Loads the model checkpoint and optimizer.
 
@@ -75,7 +75,7 @@ def resume_training(model, optimizer, resume_path, device="cuda"):
     Returns
     -------
     start_epoch : int
-       From what era should I continue training.
+       From what epoch should I continue training.
     history : dict
         History of training.
     """

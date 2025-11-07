@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import torch
+import torch.nn as nn
 
 from data.dataloaders import make_dataloaders
 from training.train_loop import train_model_full
@@ -11,18 +12,19 @@ from logging_utils.plots import (
     plot_confusion_matrix, plot_roc, plot_pr_curves, plot_calibration
 )
 from analysis.error_analysis import save_misclassified_images, plot_misclassification_summary
-from analysis.interpretability import GradCAM, compute_saliency, show_gradcam_on_image, show_saliency_on_image
+from analysis.interpretability import GradCAM, compute_saliency, show_gradcam_on_image, show_saliency_on_image, \
+    save_gradcam_on_image, save_saliency_on_image
 from models.resnext import ResNeXt50WithDropout
 from models.densenet import DenseNet161WithDropout
 from models.inception import InceptionV3Head
 from models.ensemble import EnsembleModel
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from project_root.config import DEVICE, TRAINING_CONFIG
+from training.train_loop import train_model_staged
 
-
-def run_experiment(data_root, scenario="three-class",
+def run_experiment(data_root, scenario="3-classes",
                    batch_size=32, num_workers=4, resume=None,
-                   out_dir="checkpoints"):
+                   out_dir="Checkpoints"):
     """
     Runs a full experiment:
     - model training
@@ -38,10 +40,14 @@ def run_experiment(data_root, scenario="three-class",
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Dataloaders ---
-    dls224, classes = make_dataloaders(data_root, img_size=224,
-                                       batch_size=batch_size, num_workers=num_workers)
-    dls299, _ = make_dataloaders(data_root, img_size=299,
-                                 batch_size=batch_size, num_workers=num_workers)
+    dls224, classes = make_dataloaders(data_root,
+                                       img_size=224,
+                                       batch_size=batch_size,
+                                       num_workers=num_workers)
+    dls299, _ = make_dataloaders(data_root,
+                                 img_size=299,
+                                 batch_size=batch_size,
+                                 num_workers=num_workers)
     num_classes = len(classes)
 
     # --- Models ---
@@ -54,16 +60,16 @@ def run_experiment(data_root, scenario="three-class",
     trained = {}
 
     # --- Training each model ---
-    trained["resnext"] = train_model_full("ResNeXt50", models_dict["resnext"], dls224,
-                                          num_classes, num_epochs=10, resume_path=resume.get("resnext") if resume else None,
+    trained["resnext"] = train_model_staged("ResNeXt50", models_dict["resnext"], dls224,
+                                          num_classes, resume_path=resume.get("resnext") if resume else None,
                                           device=DEVICE, out_dir=out_dir)["model"]
 
-    trained["densenet"] = train_model_full("DenseNet161", models_dict["densenet"], dls224,
-                                           num_classes, num_epochs=10, resume_path=resume.get("densenet") if resume else None,
+    trained["densenet"] = train_model_staged("DenseNet161", models_dict["densenet"], dls224,
+                                           num_classes, resume_path=resume.get("densenet") if resume else None,
                                            device=DEVICE, out_dir=out_dir)["model"]
 
-    trained["inception"] = train_model_full("InceptionV3", models_dict["inception"], dls299,
-                                            num_classes, num_epochs=10, resume_path=resume.get("inception") if resume else None,
+    trained["inception"] = train_model_staged("InceptionV3", models_dict["inception"], dls299,
+                                            num_classes, resume_path=resume.get("inception") if resume else None,
                                             device=DEVICE, out_dir=out_dir)["model"]
 
     # --- Evaluation and Metrics ---
@@ -91,18 +97,26 @@ def run_experiment(data_root, scenario="three-class",
 
             # Error analysis
             save_misclassified_images(dls[split].dataset.samples, targets, preds, classes,
-                                      model_name=name, split=split, out_dir=out_dir)
+                                      model_name=name, split=split, out_dir=out_dir, dls=dls)
             plot_misclassification_summary(targets, preds, classes, model_name=name, split=split, out_dir=out_dir)
 
             # Interpretation (Grad-CAM/Saliency) - example for one image
             img, target = next(iter(dls["val"]))
             img = img[0].unsqueeze(0).to(DEVICE)
-            gradcam = GradCAM(model, model.layer4[-1] if name == "resnext" else list(model.children())[-1])
+
+            last_conv = None
+            for module in model.modules():
+                if isinstance(module, nn.Conv2d):
+                    last_conv = module
+            if last_conv is None:
+                raise ValueError("В модели не найден Conv2d слой")
+
+            gradcam = GradCAM(model, last_conv)
             cam = gradcam.generate(img, target_class=target[0].item())
-            show_gradcam_on_image(img[0], cam, title=f"Grad-CAM {name}")
+            save_gradcam_on_image(img[0], cam, title=f"Grad-CAM {name}", out_path=out_dir)
 
             saliency = compute_saliency(model, img, target_class=target[0].item())
-            show_saliency_on_image(img[0], saliency[0], title=f"Saliency {name}")
+            save_saliency_on_image(img[0], saliency[0], title=f"Saliency {name}", out_path=out_dir)
 
     # --- Ensemble ---
     ensemble = EnsembleModel(trained, device=DEVICE)
