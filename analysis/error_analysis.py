@@ -1,13 +1,12 @@
 # analysis/error_analysis.py
 
-import os
 import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-def save_misclassified_images(images, targets, preds, classes, model_name, split, out_dir, dls):
+def save_misclassified_images(images, targets, preds, classes, model_name, split, out_dir):
     """
     Saves examples of incorrect classifications in separate folders.
 
@@ -39,7 +38,7 @@ def save_misclassified_images(images, targets, preds, classes, model_name, split
         true_label = classes[targets[idx].item()]
         pred_label = classes[preds[idx].item()]
 
-        # создаём подпапку для пары (true → pred)
+        # create a subfolder for the pair (true → pred)
         pair_dir = out_dir / f"{true_label}_as_{pred_label}"
         pair_dir.mkdir(parents=True, exist_ok=True)
 
@@ -67,9 +66,9 @@ def plot_misclassification_summary(targets, preds, classes, model_name, split, o
     ax.set_yticks(np.arange(len(classes)))
     ax.set_xticklabels(classes, rotation=45, ha="right")
     ax.set_yticklabels(classes)
-    ax.set_xlabel("Предсказанный класс")
-    ax.set_ylabel("Истинный класс")
-    ax.set_title(f"Ошибки классификации: {model_name} ({split})")
+    ax.set_xlabel("Predicted class")
+    ax.set_ylabel("True class")
+    ax.set_title(f"Classification errors: {model_name} ({split})")
 
     # signatures inside the cells
     for i in range(len(classes)):
@@ -78,5 +77,5 @@ def plot_misclassification_summary(targets, preds, classes, model_name, split, o
 
     fig.colorbar(im, ax=ax)
     fig.tight_layout()
-    plt.savefig(out_dir / f"errors_summary_{model_name}_{split}.png")
+    plt.savefig(out_dir / "Graphs" / f"errors_summary_{model_name}_{split}.png")
     plt.close(fig)

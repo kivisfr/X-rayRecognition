@@ -1,17 +1,19 @@
 # training/train_loop.py
-import time
 
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from pathlib import Path
 
 from logging_utils.logger import log, append_epoch_csv, append_epoch_xlsx
+from logging_utils.plots import plot_training_curves, plot_metric_dynamics
 from training.checkpointing import save_checkpoint, resume_training
 from training.evaluate import evaluate_model, compute_metrics
 
-from project_root.config import TRAINING_CONFIG
+from project_root.config import TRAINING_CONFIG, DEVICE
 from training.checkpointing import load_checkpoint
+
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device):
     """
@@ -68,9 +70,9 @@ def validate_one_epoch(model, dataloader, criterion, device):
     return epoch_loss, epoch_acc
 
 def train_model_staged(model_name, model, dataloaders, num_classes,
-                       device="cuda", out_dir="checkpoints", resume_path = None):
+                       device="cuda", out_dir="Checkpoints"):
     """
-    Двухэтапное обучение: сначала только голова, потом fine-tuning всей сети.
+    Two-stage training: first only the head, then fine-tuning the entire network.
     """
 
     num_epochs_stage1 = TRAINING_CONFIG["stage1"]["epochs"],
@@ -88,7 +90,7 @@ def train_model_staged(model_name, model, dataloaders, num_classes,
     if isinstance(lr_stage2, tuple):
         lr_stage2 = lr_stage2[0]
 
-    # --- Stage 1: обучаем только классификатор ---
+    # --- Stage 1: Train only the classifier ---
     for param in model.parameters():
         param.requires_grad = False
 
@@ -103,23 +105,23 @@ def train_model_staged(model_name, model, dataloaders, num_classes,
     elif hasattr(base, "classifier"):  # DenseNet
         for param in base.classifier.parameters():
             param.requires_grad = True
-    elif hasattr(base, "head"):  # вдруг кастомная реализация
+    elif hasattr(base, "head"):  # for a custom implementation
         for param in base.head.parameters():
             param.requires_grad = True
     else:
-        raise AttributeError(f"Не найден классификатор у модели {model_name}")
+        raise AttributeError(f"No classifier found for the model {model_name}")
 
 
-    log(f"=== Stage 1: обучение головы ({model_name}) ===")
+    log(f"=== Stage 1: head training ({model_name}) ===")
     train_model_full(model_name + "_stage1", model, dataloaders, num_classes,
                      num_epochs=num_epochs_stage1, lr=lr_stage1,
                      device=device, out_dir=out_dir)
 
-    # --- Stage 2: размораживаем всю модель ---
+    # --- Stage 2: we defrost the entire model ---
     for param in model.parameters():
         param.requires_grad = True
 
-    log(f"=== Stage 2: fine-tuning всей модели ({model_name}) ===")
+    log(f"=== Stage 2: fine-tuning the entire model ({model_name}) ===")
     result = train_model_full(model_name + "_stage2", model, dataloaders, num_classes,
                               num_epochs=num_epochs_stage2, lr=lr_stage2,
                               device=device, out_dir=out_dir)
@@ -129,7 +131,7 @@ def train_model_staged(model_name, model, dataloaders, num_classes,
 def train_model_full(model_name: str, model: nn.Module, dataloaders,
                      num_classes: int,
                      num_epochs : int, lr : float, resume_path = None,
-                     device="cuda", out_dir="checkpoints"):
+                     device="cuda", out_dir="Checkpoints"):
     """
     Full model training cycle with logging and checkpoints.
     """
@@ -141,7 +143,7 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
 
     if resume_path:
         if resume_path.exists():
-            start_epoch, best_val = load_checkpoint(model, optimizer, resume_path)
+            start_epoch, best_val = load_checkpoint(model, optimizer, resume_path, device=DEVICE)
         else:
             log(f"Resume path {resume_path} not found. Starting from scratch.")
 
@@ -175,7 +177,7 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
         val_loss, val_acc = validate_one_epoch(model, dataloaders["val"], criterion, device)
 
         # calculation of validation metrics
-        probs, targets = evaluate_model(model, dataloaders, num_classes, split="val", device=device)
+        probs, targets = evaluate_model(model, dataloaders, split="val", device=device)
         _, metrics, macro = compute_metrics(probs, targets, num_classes)
 
         time_end = time.time()
@@ -194,7 +196,7 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
         history["epoch_time"].append(epoch_time)
 
         log(f"Train: loss={train_loss:.4f}, acc={train_acc:.4f} | "
-            f"Val: loss={val_loss:.4f}, acc={val_acc:.4f}, f1={macro['f1']:.4f} |"
+            f"Val: loss={val_loss:.4f}, acc={val_acc:.4f}, f1={macro['f1']:.4f} | "
             f"epoch_time={epoch_time:.4f}")
 
         # logging to CSV/XLSX
@@ -205,8 +207,11 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
             "val_precision": macro["precision"], "val_recall": macro["recall"],
             "epoch_time": epoch_time
         }
-        append_epoch_csv(epoch+1, metrics_dict, out_dir / f"{model_name}_epochs.csv")
-        append_epoch_xlsx(epoch+1, metrics_dict, out_dir / f"{model_name}_epochs.xlsx")
+        append_epoch_csv(epoch+1, metrics_dict, out_dir / "csv" / f"{model_name}_epochs.csv")
+        append_epoch_xlsx(epoch+1, metrics_dict, out_dir / "xlsx" / f"{model_name}_epochs.xlsx")
+
+        plot_training_curves(history, model_name=model_name, out_dir=out_dir)
+        plot_metric_dynamics(history, model_name=model_name, out_dir=out_dir)
 
         # saving a checkpoint
         save_checkpoint(model, optimizer, epoch+1, history,

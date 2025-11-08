@@ -1,6 +1,7 @@
 # logging_utils/logger.py
 
 import csv
+import shutil
 import sys
 from pathlib import Path
 import openpyxl
@@ -28,6 +29,10 @@ def append_epoch_csv(epoch, metrics_dict, csv_path):
             Path to the CSV file.
     """
     csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    # If a directory exists where a file should be, remove it (one-time healing).
+    if csv_path.exists() and csv_path.is_dir():
+        shutil.rmtree(csv_path)
     write_header = not csv_path.exists()
 
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
@@ -53,6 +58,7 @@ def append_epoch_xlsx(epoch, metrics_dict, xlsx_path):
             Path to the XLSX file.
     """
     xlsx_path = Path(xlsx_path)
+    xlsx_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not xlsx_path.exists():
         wb = openpyxl.Workbook()

@@ -6,7 +6,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, confusion_m
 
 
 @torch.no_grad()
-def evaluate_model(model, dataloaders, num_classes, split="val", device="cuda"):
+def evaluate_model(model, dataloaders, split="val", device="cuda"):
     """
     Running a model on validation or test.
 
@@ -16,8 +16,6 @@ def evaluate_model(model, dataloaders, num_classes, split="val", device="cuda"):
         Trained model.
     dataloaders : dict
         Dictionary with DataLoaders (train/val/test).
-    num_classes : int
-        Number of classes.
     split : str
         "val" or "test".
     device : str

@@ -1,8 +1,9 @@
 # project_root/config.py
+
 from pathlib import Path
 
-# === Scenation ===
-SCENARIO = "3-classes" # or "5-classes"
+# === Scenarios ===
+SCENARIO = "5-classes" # or "5-classes"
 
 # === Paths ===
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -18,10 +19,10 @@ DO_DATASET_CHECK = False  # dataset validation before training
 AUTO_RESAVE_BAD = False   # resave broken images
 
 # === Training Settings ===
-STAGE1_EPOCHS = 1 if SMALL_RUN else 20
-STAGE2_EPOCHS = 1 if SMALL_RUN else 30
-LR_STAGE1 = 1e-2
-LR_STAGE2 = 1e-3
+STAGE1_EPOCHS = 4 if SMALL_RUN else 20
+STAGE2_EPOCHS = 2 if SMALL_RUN else 30
+LR_STAGE1 = 1e-2 if SMALL_RUN else 1e-6
+LR_STAGE2 = 1e-3 if SMALL_RUN else 1e-7
 DEFAULT_BATCH_SIZE = 4 if SMALL_RUN else 32
 DEFAULT_NUM_WORKERS = 0 if SMALL_RUN else 6
 PIN_MEMORY = True
@@ -29,6 +30,7 @@ TRAINING_CONFIG = {
     "stage1": {"epochs": STAGE1_EPOCHS, "lr": LR_STAGE1},
     "stage2": {"epochs": STAGE2_EPOCHS, "lr": LR_STAGE2}
 }
+SAMPLES = 2
 
 # === Device ===
 import torch

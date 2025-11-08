@@ -13,7 +13,7 @@ def append_metrics_xlsx(metrics, classes, model_name, split, xlsx_path, csv_path
     Parameters
     ----------
     metrics : list[dict]
-       Metrics for each class (precision, recall, specificity, f1).
+        Metrics for each class (precision, recall, specificity, f1).
     classes : list[str]
         List of class names.
     model_name : str

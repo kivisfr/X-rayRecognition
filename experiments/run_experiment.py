@@ -1,26 +1,23 @@
 # experiments/run_experiment.py
 
 from pathlib import Path
-import torch
-import torch.nn as nn
 
 from data.dataloaders import make_dataloaders
-from training.train_loop import train_model_full
 from training.evaluate import evaluate_model, compute_metrics
 from logging_utils.metrics_saver import append_metrics_xlsx, save_summary_json
 from logging_utils.plots import (
-    plot_confusion_matrix, plot_roc, plot_pr_curves, plot_calibration
+    plot_confusion_matrix, plot_roc, plot_pr_curves, plot_calibration, plot_metric_dynamics, plot_training_curves
 )
 from analysis.error_analysis import save_misclassified_images, plot_misclassification_summary
-from analysis.interpretability import GradCAM, compute_saliency, show_gradcam_on_image, show_saliency_on_image, \
-    save_gradcam_on_image, save_saliency_on_image
+from analysis.interpretability import save_random_misclassified_examples, get_last_conv_layer
 from models.resnext import ResNeXt50WithDropout
 from models.densenet import DenseNet161WithDropout
 from models.inception import InceptionV3Head
 from models.ensemble import EnsembleModel
 
-from project_root.config import DEVICE, TRAINING_CONFIG
+from project_root.config import DEVICE, CHECKPOINT_DIR, SAMPLES
 from training.train_loop import train_model_staged
+
 
 def run_experiment(data_root, scenario="3-classes",
                    batch_size=32, num_workers=4, resume=None,
@@ -61,15 +58,15 @@ def run_experiment(data_root, scenario="3-classes",
 
     # --- Training each model ---
     trained["resnext"] = train_model_staged("ResNeXt50", models_dict["resnext"], dls224,
-                                          num_classes, resume_path=resume.get("resnext") if resume else None,
+                                          num_classes,
                                           device=DEVICE, out_dir=out_dir)["model"]
 
     trained["densenet"] = train_model_staged("DenseNet161", models_dict["densenet"], dls224,
-                                           num_classes, resume_path=resume.get("densenet") if resume else None,
+                                           num_classes,
                                            device=DEVICE, out_dir=out_dir)["model"]
 
     trained["inception"] = train_model_staged("InceptionV3", models_dict["inception"], dls299,
-                                            num_classes, resume_path=resume.get("inception") if resume else None,
+                                            num_classes,
                                             device=DEVICE, out_dir=out_dir)["model"]
 
     # --- Evaluation and Metrics ---
@@ -79,14 +76,14 @@ def run_experiment(data_root, scenario="3-classes",
         dls = dls224 if name in ["resnext", "densenet"] else dls299
 
         for split in ["val", "test"]:
-            probs, targets = evaluate_model(model, dls, num_classes, split=split, device=DEVICE)
+            probs, targets = evaluate_model(model, dls, split=split, device=DEVICE)
             acc, metrics, macro = compute_metrics(probs, targets, num_classes)
 
             results[split][name] = {"acc": acc, "macro": macro}
 
             # Saving metrics
             append_metrics_xlsx(metrics, classes, name, split,
-                                out_dir / "metrics.xlsx", out_dir / "metrics.csv")
+                                out_dir / "xlsx" / "metrics.xlsx", out_dir / "csv" / "metrics.csv")
 
             # Charts
             preds = probs.argmax(dim=1)
@@ -95,32 +92,32 @@ def run_experiment(data_root, scenario="3-classes",
             plot_pr_curves(targets.numpy(), probs.numpy(), classes, name, split, out_dir=out_dir)
             plot_calibration(targets.numpy(), probs.numpy(), classes, name, split, out_dir=out_dir)
 
+
             # Error analysis
             save_misclassified_images(dls[split].dataset.samples, targets, preds, classes,
-                                      model_name=name, split=split, out_dir=out_dir, dls=dls)
+                                      model_name=name, split=split, out_dir=out_dir)
             plot_misclassification_summary(targets, preds, classes, model_name=name, split=split, out_dir=out_dir)
 
             # Interpretation (Grad-CAM/Saliency) - example for one image
-            img, target = next(iter(dls["val"]))
-            img = img[0].unsqueeze(0).to(DEVICE)
+            get_last_conv_layer(model)
 
-            last_conv = None
-            for module in model.modules():
-                if isinstance(module, nn.Conv2d):
-                    last_conv = module
-            if last_conv is None:
-                raise ValueError("В модели не найден Conv2d слой")
+            save_random_misclassified_examples(
+                dls["val"].dataset,
+                targets,
+                preds,
+                classes,
+                model,
+                model_name=name,
+                split="val",
+                out_dir=CHECKPOINT_DIR,
+                n_samples=SAMPLES,
+                device=DEVICE
+            )
 
-            gradcam = GradCAM(model, last_conv)
-            cam = gradcam.generate(img, target_class=target[0].item())
-            save_gradcam_on_image(img[0], cam, title=f"Grad-CAM {name}", out_path=out_dir)
-
-            saliency = compute_saliency(model, img, target_class=target[0].item())
-            save_saliency_on_image(img[0], saliency[0], title=f"Saliency {name}", out_path=out_dir)
 
     # --- Ensemble ---
     ensemble = EnsembleModel(trained, device=DEVICE)
-    probs, targets = evaluate_model(ensemble, dls224, num_classes, split="test", device=DEVICE)
+    probs, targets = evaluate_model(ensemble, dls224, split="test", device=DEVICE)
     acc, metrics, macro = compute_metrics(probs, targets, num_classes)
     results["test"]["ensemble"] = {"acc": acc, "macro": macro}
 

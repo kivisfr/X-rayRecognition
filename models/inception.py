@@ -1,6 +1,5 @@
 # models/inception.py
 
-import torch
 import torch.nn as nn
 import torchvision.models as models
 
@@ -17,7 +16,7 @@ class InceptionV3Head(nn.Module):
         # Loading the base model
         self.base_model = models.inception_v3(
             weights="IMAGENET1K_V1" if pretrained else None,
-            aux_logits=True  # включаем aux для совместимости
+            aux_logits=True  # Enable aux for compatibility.
         )
 
         # Main head
