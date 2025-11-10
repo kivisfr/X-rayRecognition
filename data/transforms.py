@@ -2,6 +2,8 @@
 
 from torchvision import transforms
 
+from project_root.config import IMAGENET_MEAN, IMAGENET_STD
+
 
 def get_train_transforms(img_size=224):
     """
@@ -10,13 +12,14 @@ def get_train_transforms(img_size=224):
     return transforms.Compose([
         transforms.Grayscale(num_output_channels=3),   # гарантируем 3 канала
         transforms.Resize((img_size, img_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomPerspective(distortion_scale=0.4, p=0.3),
+        transforms.RandomRotation(15),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=IMAGENET_MEAN,
+                             std=IMAGENET_STD)
     ])
 
 
@@ -27,9 +30,10 @@ def get_val_transforms(img_size=224):
     return transforms.Compose([
         transforms.Grayscale(num_output_channels=3),   # гарантируем 3 канала
         transforms.Resize((img_size, img_size)),
+        transforms.CenterCrop(img_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=IMAGENET_MEAN,
+                             std=IMAGENET_STD)
     ])
 
 
@@ -40,7 +44,8 @@ def get_test_transforms(img_size=224):
     return transforms.Compose([
         transforms.Grayscale(num_output_channels=3),   # гарантируем 3 канала
         transforms.Resize((img_size, img_size)),
+        transforms.CenterCrop(img_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=IMAGENET_MEAN,
+                             std=IMAGENET_STD)
     ])

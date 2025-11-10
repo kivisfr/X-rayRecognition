@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from data.dataloaders import make_dataloaders
+from logging_utils.logger import log
 from training.evaluate import evaluate_model, compute_metrics
 from logging_utils.metrics_saver import append_metrics_xlsx, save_summary_json
 from logging_utils.plots import (
@@ -33,6 +34,11 @@ def run_experiment(data_root, scenario="3-classes",
     - ensemble
     """
 
+    #if DO_DATASET_CHECK:
+    #    log("Running dataset check before training...")
+    #    check_dataset(data_root, scenario, report_path=DATASET_REPORT, auto_resave=AUTO_RESAVE_BAD)
+
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -46,11 +52,12 @@ def run_experiment(data_root, scenario="3-classes",
                                  batch_size=batch_size,
                                  num_workers=num_workers)
     num_classes = len(classes)
+    log(f"Classes ({num_classes}): {classes}")
 
     # --- Models ---
     models_dict = {
-        "resnext": ResNeXt50WithDropout(num_classes=num_classes, pretrained=True),
-        "densenet": DenseNet161WithDropout(num_classes=num_classes, pretrained=True),
+        "resnext": ResNeXt50WithDropout(num_classes=num_classes, pretrained=True, dropout_p=0.3),
+        "densenet": DenseNet161WithDropout(num_classes=num_classes, pretrained=True, dropout_p=0.3),
         "inception": InceptionV3Head(num_classes=num_classes, pretrained=True),
     }
 

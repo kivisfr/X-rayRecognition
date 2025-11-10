@@ -6,12 +6,14 @@ from pathlib import Path
 from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve
 from sklearn.calibration import calibration_curve
 
+from project_root.config import PLOTS_DIR
+
 
 # ============================
 # Learning curves
 # ============================
 
-def plot_training_curves(history, model_name, out_dir=Path("Graphs")):
+def plot_training_curves(history, model_name, out_dir=PLOTS_DIR):
     """
     Plots loss and accuracy by epoch.
     history: dict with keys "train_loss", "val_loss", "train_acc", "val_acc"
@@ -43,7 +45,7 @@ def plot_training_curves(history, model_name, out_dir=Path("Graphs")):
     plt.close()
 
 
-def plot_metric_dynamics(history, model_name, out_dir=Path("Graphs")):
+def plot_metric_dynamics(history, model_name, out_dir=PLOTS_DIR):
     """
     Plots F1, Precision, and Recall dynamics by epoch.
     history: dict with keys "train_f1", "val_f1", "train_precision", "val_precision", "train_recall", "val_recall"
@@ -74,7 +76,7 @@ def plot_metric_dynamics(history, model_name, out_dir=Path("Graphs")):
 # Confusion Matrix
 # ============================
 
-def plot_confusion_matrix(y_true, y_pred, classes, model_name, split, normalize=False, out_dir=Path("Graphs")):
+def plot_confusion_matrix(y_true, y_pred, classes, model_name, split, normalize=False, out_dir=PLOTS_DIR):
     """
     Constructs a confusion matrix.
     """
@@ -111,7 +113,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, model_name, split, normalize=
 # ROC Curve
 # ============================
 
-def plot_roc(y_true, y_probs, classes, model_name, split, out_dir=Path("Graphs")):
+def plot_roc(y_true, y_probs, classes, model_name, split, out_dir=PLOTS_DIR):
     """
     Plots ROC curves for each class.
     """
@@ -138,7 +140,7 @@ def plot_roc(y_true, y_probs, classes, model_name, split, out_dir=Path("Graphs")
 # Precision-Recall Curve
 # ============================
 
-def plot_pr_curves(y_true, y_probs, classes, model_name, split, out_dir=Path("Graphs")):
+def plot_pr_curves(y_true, y_probs, classes, model_name, split, out_dir=PLOTS_DIR):
     """
     Plots Precision-Recall curves for each class.
     """
@@ -163,7 +165,7 @@ def plot_pr_curves(y_true, y_probs, classes, model_name, split, out_dir=Path("Gr
 # Calibration Curve
 # ============================
 
-def plot_calibration(y_true, y_probs, classes, model_name, split, out_dir=Path("Graphs"), n_bins=10):
+def plot_calibration(y_true, y_probs, classes, model_name, split, out_dir=PLOTS_DIR, n_bins=10):
     """
     Constructs calibration curves (how well the model's probabilities match reality).
     """

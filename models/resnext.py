@@ -18,9 +18,13 @@ class ResNeXt50WithDropout(nn.Module):
         # The size of the last block output
         in_features = self.base_model.fc.in_features
 
+        self.base_model.fc = nn.Identity()
+
         # Replacing the classification head
         self.base_model.fc = nn.Sequential(
-            nn.Dropout(p=dropout_p),
+            nn.Linear(in_features, in_features),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_p),
             nn.Linear(in_features, num_classes)
         )
 

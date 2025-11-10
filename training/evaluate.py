@@ -73,25 +73,43 @@ def compute_metrics(probs, targets, num_classes):
     macro : dict
         Macro-average metrics.
     """
-    preds = probs.argmax(dim=1).numpy()
-    targets_np = targets.numpy()
+   # preds = probs.argmax(dim=1).numpy()
+   # targets_np = targets.numpy()
 
-    acc = (preds == targets_np).mean()
+   # acc = (preds == targets_np).mean()
 
+   # metrics = []
+
+    preds = probs.argmax(dim=1)
+    acc = (preds == targets).float().mean().item()
     metrics = []
+
+
     for c in range(num_classes):
-        # binary labels for class c
-        y_true = (targets_np == c).astype(int)
-        y_pred = (preds == c).astype(int)
 
-        precision = precision_score(y_true, y_pred, zero_division=0)
-        recall = recall_score(y_true, y_pred, zero_division=0)
-        f1 = f1_score(y_true, y_pred, zero_division=0)
 
-        # specificity = TN / (TN+FP)
-        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
-        tn, fp, fn, tp = cm.ravel()
+
+      #  # binary labels for class c
+      #  y_true = (targets_np == c).astype(int)
+      #  y_pred = (preds == c).astype(int)
+#
+#        precision = precision_score(y_true, y_pred, zero_division=0)
+ #       recall = recall_score(y_true, y_pred, zero_division=0)
+  #      f1 = f1_score(y_true, y_pred, zero_division=0)
+#
+ #       # specificity = TN / (TN+FP)
+  #      cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+   #     tn, fp, fn, tp = cm.ravel()
+ #       specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+
+        tp = ((preds == c) & (targets == c)).sum().item()
+        fp = ((preds == c) & (targets != c)).sum().item()
+        fn = ((preds != c) & (targets == c)).sum().item()
+        tn = ((preds != c) & (targets != c)).sum().item()
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
         metrics.append({
             "precision": precision,

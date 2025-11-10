@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 from data.transforms import get_train_transforms, get_val_transforms, get_test_transforms
+from project_root.config import PIN_MEMORY
 
 
 def make_dataloaders(data_root, img_size=224, batch_size=32, num_workers=4):
@@ -38,9 +39,9 @@ def make_dataloaders(data_root, img_size=224, batch_size=32, num_workers=4):
 
     classes = train_ds.classes
 
-    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_dl   = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    test_dl  = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=PIN_MEMORY)
+    val_dl   = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=PIN_MEMORY)
+    test_dl  = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=PIN_MEMORY)
 
     dls = {"train": train_dl, "val": val_dl, "test": test_dl}
     return dls, classes

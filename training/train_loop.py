@@ -5,68 +5,84 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from pathlib import Path
+import torch.nn.functional as F
 
 from logging_utils.logger import log, append_epoch_csv, append_epoch_xlsx
 from logging_utils.plots import plot_training_curves, plot_metric_dynamics
+from losses.focal_loss import FocalLoss
 from training.checkpointing import save_checkpoint, resume_training
 from training.evaluate import evaluate_model, compute_metrics
 
-from project_root.config import TRAINING_CONFIG, DEVICE
+from project_root.config import TRAINING_CONFIG, DEVICE, FOCAL_GAMMA, AUX_LOSS_WEIGHT
 from training.checkpointing import load_checkpoint
 
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device):
+def train_one_epoch(model, dataloader, criterion, optimizer, device = DEVICE, aux_loss_weight = AUX_LOSS_WEIGHT):
     """
     Training a model in one epoch.
     """
     model.train()
     running_loss, running_corrects, total = 0.0, 0, 0
 
-    for xb, yb in dataloader:
-        xb, yb = xb.to(device), yb.to(device)
-
+    for images, targets in dataloader:
+        images, targets = images.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = model(xb)
+        outputs = model(images)
         if isinstance(outputs, tuple):  # for Inception
-            outputs = outputs[0]
+            main_logits, aux_logits = outputs
+            loss_main = criterion(main_logits, targets)
+            loss_aux = criterion(aux_logits, targets)
+            loss = loss_main + aux_loss_weight * loss_aux
+            logits = main_logits
+        else:
+            loss = criterion(outputs, targets)
+            logits = outputs
 
-        loss = criterion(outputs, yb)
         loss.backward()
         optimizer.step()
 
-        preds = outputs.argmax(dim=1)
-        running_loss += loss.item() * xb.size(0)
-        running_corrects += (preds == yb).sum().item()
-        total += xb.size(0)
+        probs = F.softmax(logits, dim=1)
+        preds = probs.argmax(dim=1)
 
-    epoch_loss = running_loss / total
-    epoch_acc = running_corrects / total
+        running_loss += loss.item() * images.size(0)
+        running_corrects += (preds == targets).sum().item()
+        total += images.size(0)
+
+    epoch_loss = running_loss / total  if total>0 else 0.0
+    epoch_acc = running_corrects / total  if total>0 else 0.0
     return epoch_loss, epoch_acc
 
-
-def validate_one_epoch(model, dataloader, criterion, device):
+@torch.no_grad()
+def validate_one_epoch(model, dataloader, criterion, optimizer, device=DEVICE, aux_loss_weight = AUX_LOSS_WEIGHT):
     """
     Validation of the model for one epoch.
     """
     model.eval()
     running_loss, running_corrects, total = 0.0, 0, 0
 
-    with torch.no_grad():
-        for xb, yb in dataloader:
-            xb, yb = xb.to(device), yb.to(device)
-            outputs = model(xb)
-            if isinstance(outputs, tuple):
-                outputs = outputs[0]
 
-            loss = criterion(outputs, yb)
-            preds = outputs.argmax(dim=1)
+    for images, targets in dataloader:
+        images, targets = images.to(device), targets.to(device)
+        outputs = model(images)
+        if isinstance(outputs, tuple):
+            main_logits, aux_logits = outputs
+            loss_main = criterion(main_logits, targets)
+            loss_aux = criterion(aux_logits, targets)
+            loss = loss_main + aux_loss_weight * loss_aux
+            logits = main_logits
+        else:
+            loss = criterion(outputs, targets)
+            logits = outputs
 
-            running_loss += loss.item() * xb.size(0)
-            running_corrects += (preds == yb).sum().item()
-            total += xb.size(0)
+        probs = F.softmax(logits, dim=1)
+        preds = probs.argmax(dim=1)
 
-    epoch_loss = running_loss / total
-    epoch_acc = running_corrects / total
+        running_loss += loss.item() * images.size(0)
+        running_corrects += (preds == targets).sum().item()
+        total += images.size(0)
+
+    epoch_loss = running_loss / total if total>0 else 0.0
+    epoch_acc = running_corrects / total  if total>0 else 0.0
     return epoch_loss, epoch_acc
 
 def train_model_staged(model_name, model, dataloaders, num_classes,
@@ -111,7 +127,7 @@ def train_model_staged(model_name, model, dataloaders, num_classes,
     else:
         raise AttributeError(f"No classifier found for the model {model_name}")
 
-
+    model_start_time = time.time()
     log(f"=== Stage 1: head training ({model_name}) ===")
     train_model_full(model_name + "_stage1", model, dataloaders, num_classes,
                      num_epochs=num_epochs_stage1, lr=lr_stage1,
@@ -125,6 +141,9 @@ def train_model_staged(model_name, model, dataloaders, num_classes,
     result = train_model_full(model_name + "_stage2", model, dataloaders, num_classes,
                               num_epochs=num_epochs_stage2, lr=lr_stage2,
                               device=device, out_dir=out_dir)
+    model_end_time = time.time()
+    model_time = model_end_time - model_start_time
+    log(f"=== {model_time/60} minutes for training ({model_name}) ===")
 
     return result
 
@@ -137,15 +156,10 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
     """
     log("=" * 60)
     log(f"Start training model: {model_name}")
+    model = model.to(DEVICE)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    if resume_path:
-        if resume_path.exists():
-            start_epoch, best_val = load_checkpoint(model, optimizer, resume_path, device=DEVICE)
-        else:
-            log(f"Resume path {resume_path} not found. Starting from scratch.")
+    criterion = FocalLoss(gamma=FOCAL_GAMMA)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -164,7 +178,8 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
             "epoch_time": []
         }
 
-    model.to(device)
+    for g in optimizer.param_groups:
+        g['lr'] = lr
 
     for epoch in range(start_epoch, num_epochs):
         log(f"=== Epoch {epoch+1}/{num_epochs} ({model_name}) ===")
@@ -172,9 +187,9 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
         time_start = time.time()
 
         # training
-        train_loss, train_acc = train_one_epoch(model, dataloaders["train"], criterion, optimizer, device)
+        train_loss, train_acc = train_one_epoch(model, dataloaders["train"], criterion, optimizer, device, aux_loss_weight=AUX_LOSS_WEIGHT)
         # validation
-        val_loss, val_acc = validate_one_epoch(model, dataloaders["val"], criterion, device)
+        val_loss, val_acc = validate_one_epoch(model, dataloaders["val"], criterion, optimizer, device, aux_loss_weight=AUX_LOSS_WEIGHT)
 
         # calculation of validation metrics
         probs, targets = evaluate_model(model, dataloaders, split="val", device=device)
@@ -210,11 +225,13 @@ def train_model_full(model_name: str, model: nn.Module, dataloaders,
         append_epoch_csv(epoch+1, metrics_dict, out_dir / "csv" / f"{model_name}_epochs.csv")
         append_epoch_xlsx(epoch+1, metrics_dict, out_dir / "xlsx" / f"{model_name}_epochs.xlsx")
 
-        plot_training_curves(history, model_name=model_name, out_dir=out_dir)
-        plot_metric_dynamics(history, model_name=model_name, out_dir=out_dir)
 
         # saving a checkpoint
         save_checkpoint(model, optimizer, epoch+1, history,
                         out_dir / f"{model_name}_epoch{epoch+1}.pth")
+
+    plot_training_curves(history, model_name=model_name, out_dir=out_dir)
+    plot_metric_dynamics(history, model_name=model_name, out_dir=out_dir)
+
 
     return {"model": model, "history": history}
