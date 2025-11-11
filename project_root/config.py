@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 
 # === Scenarios ===
-SCENARIO = "3-classes" # or "5-classes"
+SCENARIO = "5-classes" # or "5-classes"
 
 # === Paths ===
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
